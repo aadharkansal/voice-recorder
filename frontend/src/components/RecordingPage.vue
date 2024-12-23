@@ -5,9 +5,13 @@
       <p>Record, upload, and merge your audio chunks.</p>
     </div>
 
+    
+
     <div class="recording-controls">
       <div v-if="!isRecording" class="button-container">
-        <button @click="startRecording" class="start-btn">Start Recording</button>
+        <button @click="startRecording" class="start-btn">
+          Start Recording
+        </button>
       </div>
 
       <div v-else>
@@ -30,7 +34,11 @@
     <div v-if="audioChunks.length" class="chunks">
       <h2>Recorded Chunks</h2>
       <div class="chunk-list">
-        <div class="chunk-card" v-for="(chunk, index) in audioChunks" :key="index">
+        <div
+          class="chunk-card"
+          v-for="(chunk, index) in audioChunks"
+          :key="index"
+        >
           <div class="chunk-info">
             <strong>Chunk {{ index + 1 }}:</strong>
             <span>{{ chunk.duration }} seconds</span>
@@ -43,7 +51,9 @@
         <p>Total chunks generated: {{ totalChunks }}</p>
       </div>
 
-      <button @click="mergeAndUploadChunks" class="merge-btn">Merge and Upload</button>
+      <button @click="mergeAndUploadChunks" class="merge-btn">
+        Upload
+      </button>
     </div>
 
     <div v-if="isMerging" class="merging-status">
@@ -57,12 +67,14 @@
         Your browser does not support the audio element.
       </audio>
     </div>
+    <MergeAudio />
   </div>
 </template>
 
 <script>
-import RecordRTC from 'recordrtc';
-import axiosInstance from '../axios';
+import RecordRTC from "recordrtc";
+import axiosInstance from "../axios";
+import MergeAudio from "./MergeAudio.vue";
 
 export default {
   data() {
@@ -71,41 +83,56 @@ export default {
       recorder: null,
       audioChunks: [],
       isMerging: false,
-      chunkDuration: 10, // Default chunk duration in seconds (Updated to 10 seconds)
-      totalRecordingTime: 0, // Will calculate actual total recording time
+      chunkDuration: 10, // Default chunk duration in seconds
+      totalRecordingTime: 0,
       totalChunks: 0,
       mergedAudioUrl: null,
       stream: null,
-      startTime: null, // Track the start time of the recording
+      startTime: null,
     };
   },
   methods: {
-    // Start recording with RecordRTC
     startRecording() {
       this.audioChunks = [];
       this.totalRecordingTime = 0;
       this.totalChunks = 0;
-      this.startTime = Date.now(); // Record start time
+      this.startTime = Date.now(); 
 
-      navigator.mediaDevices.getUserMedia({ audio: true })
+      navigator.mediaDevices
+        .getUserMedia({ audio: true })
         .then((stream) => {
           this.stream = stream;
 
           // Create a new RecordRTC instance
           this.recorder = new RecordRTC(stream, {
-            type: 'audio',
-            mimeType: 'audio/wav',
-            timeSlice: this.chunkDuration * 1000, // Time slice in milliseconds (e.g., 10 seconds)
+            type: "audio",
+            mimeType: "audio/webm", 
+            timeSlice: this.chunkDuration * 1000, 
             ondataavailable: (blob) => {
-              const chunkDuration = this.chunkDuration;
-              const chunk = {
-                blob: blob,
-                duration: chunkDuration, // Set chunk duration as expected (for initial chunks)
-              };
+              const currentTime = Date.now();
+              const elapsedTime = Math.round(
+                (currentTime - this.startTime) / 1000
+              );
 
-              // Push the chunk to the array
-              this.audioChunks.push(chunk);
-              this.totalChunks = this.audioChunks.length;
+              // Calculate chunk duration
+              const chunkDuration = Math.min(
+                this.chunkDuration,
+                elapsedTime - this.totalRecordingTime
+              );
+
+              if (chunkDuration > 0) {
+                this.audioChunks.push({
+                  blob: blob,
+                  duration: chunkDuration,
+                });
+
+                this.totalChunks = this.audioChunks.length;
+                this.totalRecordingTime += chunkDuration;
+
+                console.log(
+                  `Recorded chunk duration: ${chunkDuration} seconds`
+                );
+              }
             },
           });
 
@@ -113,7 +140,7 @@ export default {
           this.isRecording = true;
         })
         .catch((error) => {
-          console.error('Error accessing microphone:', error);
+          console.error("Error accessing microphone:", error);
         });
     },
 
@@ -121,54 +148,81 @@ export default {
     stopRecording() {
       this.isRecording = false;
       this.recorder.stopRecording(() => {
-        this.stream.getTracks().forEach(track => track.stop()); // Stop the microphone stream
+        this.stream.getTracks().forEach((track) => track.stop()); // Stop the microphone stream
 
-        // Calculate the actual duration of each chunk
         const endTime = Date.now();
-        const lastChunk = this.audioChunks[this.audioChunks.length - 1];
-        const actualDuration = Math.round((endTime - this.startTime) / 1000);
+        const totalElapsedTime = Math.round((endTime - this.startTime) / 1000);
 
-        // Adjust the last chunk's duration based on the actual recording time
         if (this.audioChunks.length > 0) {
-          lastChunk.duration = actualDuration % this.chunkDuration;
+          const lastChunk = this.audioChunks[this.audioChunks.length - 1];
+          const recordedTime = this.audioChunks.reduce(
+            (acc, chunk) => acc + chunk.duration,
+            0
+          );
+          const adjustment = totalElapsedTime - recordedTime;
+
+          if (adjustment > 0 && adjustment <= this.chunkDuration) {
+            lastChunk.duration += adjustment;
+            this.totalRecordingTime += adjustment;
+          }
         }
 
-        // Recalculate the total recording time by summing up each chunk's actual duration
-        this.totalRecordingTime = this.audioChunks.reduce((acc, chunk) => acc + chunk.duration, 0);
+        console.log("Final recording time:", this.totalRecordingTime);
+        console.log(
+          "All chunk durations:",
+          this.audioChunks.map((chunk) => chunk.duration)
+        );
       });
     },
 
-    // Merge and upload chunks to the backend
-    mergeAndUploadChunks() {
-      this.isMerging = true;
-
-      const formData = new FormData();
-      this.audioChunks.forEach((chunk, index) => {
-        formData.append(`chunk_${index}`, chunk.blob, `chunk_${Date.now() + index}.wav`);
+    // Convert Blob to Base64
+    async convertBlobToBase64(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64Data = reader.result.split(",")[1]; // Extract Base64 string
+          resolve(base64Data);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
       });
-
-      axiosInstance.post('/api/v1/audio/add', formData)
-        .then(() => {
-          console.log('Chunks uploaded successfully');
-          this.isMerging = false;
-          this.fetchMergedAudio();
-        })
-        .catch((error) => {
-          console.error('Error uploading chunks', error);
-          this.isMerging = false;
-        });
     },
 
-    // Fetch the merged audio from the backend
-    fetchMergedAudio() {
-      axiosInstance.get('/api/v1/audio/remove')
-        .then((response) => {
-          this.mergedAudioUrl = response.data.audioUrl; // Assume S3 URL is returned
-        })
-        .catch((error) => {
-          console.error('Error fetching audio', error);
+    async mergeAndUploadChunks() {
+      try {
+        this.isMerging = true;
+
+        if (this.audioChunks.length === 0) {
+          throw new Error("No audio chunks available to upload.");
+        }
+
+        // Convert all chunks to Base64
+        const binaryChunks = await Promise.all(
+          this.audioChunks.map((chunk) => this.convertBlobToBase64(chunk.blob))
+        );
+
+        const payload = {
+          timestamp: Date.now(),
+          chunks: binaryChunks,
+        };
+
+        await axiosInstance.post("/api/v1/audio/add", payload, {
+          headers: {
+            "Content-Type": "application/json",
+          },
         });
+
+        alert("Audio uploaded successfully!");
+      } catch (error) {
+        console.error("Error during merge or upload:", error);
+        alert("Failed to merge or upload audio.");
+      } finally {
+        this.isMerging = false;
+      }
     },
+  },
+  components: {
+    MergeAudio,
   },
 };
 </script>
@@ -199,7 +253,9 @@ export default {
   margin-bottom: 20px;
 }
 
-.start-btn, .stop-btn, .merge-btn {
+.start-btn,
+.stop-btn,
+.merge-btn {
   padding: 12px 24px;
   font-size: 16px;
   background-color: #007bff;
@@ -210,7 +266,9 @@ export default {
   transition: background-color 0.3s;
 }
 
-.start-btn:hover, .stop-btn:hover, .merge-btn:hover {
+.start-btn:hover,
+.stop-btn:hover,
+.merge-btn:hover {
   background-color: #0056b3;
 }
 

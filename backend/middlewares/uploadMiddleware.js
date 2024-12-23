@@ -1,15 +1,35 @@
-// middlewares/uploadMiddleware.js
-const multer = require('multer');
-const path = require('path');
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
 
-// Set up multer to store chunks temporarily on the server
 const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, './uploads'); // Store files in the 'uploads' directory
-    },
-    filename: (req, file, cb) => {
-        cb(null, Date.now() + '-' + file.originalname); // Use a timestamp to prevent filename collisions
+  destination: (req, file, cb) => {
+    if (!req.timestamp) {
+      req.timestamp = req.body.timestamp || Date.now(); // Use a single timestamp for all files in the request
     }
+
+    const uploadPath = path.join(
+      __dirname,
+      "..",
+      "uploads",
+      req.timestamp.toString()
+    );
+
+    if (!fs.existsSync(uploadPath)) {
+      fs.mkdirSync(uploadPath, { recursive: true });
+    }
+
+    cb(null, uploadPath);
+  },
+  filename: (req, file, cb) => {
+    if (!req.chunkIndex) {
+      req.chunkIndex = 0;
+    }
+    const filename = `chunk_${req.chunkIndex}-${file.originalname}`;
+    req.chunkIndex++;
+    console.log("Generated Filename:", filename);
+    cb(null, filename);
+  },
 });
 
 const upload = multer({ storage: storage });

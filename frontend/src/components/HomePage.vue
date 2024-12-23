@@ -3,13 +3,19 @@
     <h1>Welcome to My Audio Recording App!</h1>
     <p>This app lets you record audio, upload chunks, and merge them into a single file.</p>
 
-    <h2>My Projects</h2>
-    <div class="projects">
-      <div class="project-card" v-for="(project, index) in projects" :key="index">
-        <h3>{{ project.title }}</h3>
-        <p>{{ project.description }}</p>
+    <h2>My Previous Projects</h2>
+      <div class="projects">
+        <h3>Designed Scalable Backend Services</h3>
+        <p>
+          Built backend systems integrating multiple LLMs across regions, cutting downtime by 99% and saving $10K monthly, with automation reducing developer effort by 90%.
+        </p>
       </div>
-    </div>
+      <div class="projects">
+        <h3>Optimized Data Processing and Retrieval</h3>
+        <p>
+          Developed AWS Lambda-based ingestion pipelines, cutting SageMaker costs by 85%, and implemented hybrid Weaviate search, boosting retrieval accuracy by 38% for 20Mn documents.
+        </p>
+      </div>
   </div>
 </template>
 
